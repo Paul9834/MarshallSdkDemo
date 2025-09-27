@@ -1,5 +1,8 @@
 # MarshallSdkDemo · README técnico
 
+![Marshall 8 Frontal](https://imgur.com/spYDd5h.png)
+![Marshall 8 Posterior](https://imgur.com/vg79b8f.png)
+
 ## Descripción
 Demo Android (Jetpack Compose) para integrar el **Marshall 8** de Aratek con el **SDK BMAPI v3.x**. Expone flujos de huella (enrolar, verificar, identificar) y escaneo de QR, con arquitectura orientada a pruebas y desacople de drivers.
 
