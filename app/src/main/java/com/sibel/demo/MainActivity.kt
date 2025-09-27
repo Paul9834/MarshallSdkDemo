@@ -8,6 +8,7 @@ import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import com.sibel.demo.ui.theme.AppTheme
+import com.sibel.demo.ui.theme.MainAppScaffold
 
 class MainActivity : ComponentActivity() {
 
@@ -24,10 +25,15 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            AppTheme {
-                MainDashboard(vm)
+            AppTheme(
+                useDynamicColor = false,   // desactiva Monet
+                useTrueBlackDark = true    // OLED negro en dark
+                // darkTheme = isSystemInDarkTheme() // ya es el default
+            ) {
+                MainAppScaffold(vm)
             }
         }
+
     }
 }
 // Sugerencia: mueve esto a Motion.kt

@@ -1,3 +1,8 @@
 <resources>
-    <style name="Theme.Material3.DayNight.NoActionBar" parent="Theme.Material3.DayNight.NoActionBar"/>
+    <!-- Tema base de la app SIN ActionBar (M3) -->
+    <style name="Theme.Sibel" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Opcional edge-to-edge por XML (ya usas enableEdgeToEdge en código) -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>

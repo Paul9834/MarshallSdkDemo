@@ -66,6 +66,9 @@ dependencies {
     // ✅ Material3 compatible con SDK 34
     implementation("androidx.compose.material3:material3:1.3.0")
 
+    implementation("com.google.android.material:material:1.12.0")
+
+
     // Íconos extendidos
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
