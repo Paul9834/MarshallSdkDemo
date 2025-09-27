@@ -1,0 +1,82 @@
+Integración biométrica con Aratek BMAPI en tablet Marshall 8: informe técnico (formato APA)
+Autor: Equipo Sibel
+Fecha: 2025-09-26
+Repositorio: Sibel Demo (Android/Jetpack Compose)
+
+Resumen
+Este informe documenta la integración entre una aplicación Android escrita con Jetpack Compose y el SDK Aratek BMAPI para lector de huellas y escáner QR, ejecutándose en la tablet Marshall 8. Se abordan ajustes de compilación (AGP/compileSdk), diseño y theming (Material 3 + OLED true black), componentes de UI (Top App Bar creativa, cards animadas y desplazamiento fluido), además del flujo correcto de manejo de periféricos, permisos y códigos de error del SDK. Las conclusiones resaltan un camino de integración reproducible y seguro que servirá de base para el README del repositorio.
+
+1. Introducción
+El objetivo fue dejar operativa una base de app Compose con estilo moderno, estados claros y hooks para capturar/identificar huellas y leer códigos con el SDK BMAPI. Se validó la compatibilidad de dependencias, se definió una paleta OLED/true black (negro puro como fondo, acentos verde/violeta) y se construyeron componentes reutilizables mientras se respetan los flujos recomendados por Aratek (encendido, apertura, operación, cierre y apagado) para cada periférico: getInstance → powerOn → open → (operar) → close → powerOff; open debe ser exitoso para operar.
+
+2. Entorno de desarrollo y compatibilidad
+• Base tecnológica: Kotlin, Jetpack Compose, Material 3, Compose BOM 2024.09.x, Kotlin Compiler Extension 1.5.14, coroutines.  
+• Android Gradle Plugin (AGP) y compileSdk: Material3 1.4.0 exige AGP 8.6+ y compileSdk 35. Si el proyecto usa AGP 8.5.x y compileSdk 34 aparecerán errores AAR metadata. Estrategia: (a) actualizar AGP/compileSdk; o (b) fijar material3 en 1.2.x/1.3.x.  
+• Dispositivo Marshall 8: Android 11 o superior, certificación IP65, batería 10,000 mAh (≈14 h), biometría FAP 30 y escaneo de códigos; justifica el uso de FingerprintScanner/Bione y CodeScanner del SDK.
+
+3. Integración de Aratek BMAPI
+3.1 Estructura del SDK y clases
+Clases principales: cn.com.aratek.fp.FingerprintScanner (dispositivo de huellas), cn.com.aratek.fp.Bione (motor algorítmico: extracción, generalización, verificación/identificación), cn.com.aratek.qrc.CodeScanner (QR/2D), y utilidades de terminal para cargar ajustes.  
+Métodos clave por dispositivo: powerOn/powerOff, open/close, operaciones (capturar imagen, obtener SN/FW, leer códigos, etc.).
+
+3.2 Preparación del proyecto
+• Copiar todas las JAR del demo de Aratek a app/libs (p. ej., AraBMApiDev.jar, AraBMApiFP.jar, AraBMApiQrc.jar).  
+• Copiar todos los .so de jniLibs (arm64-v8a y armeabi-v7a) del demo al módulo.  
+• No copiar el terminal.xml del demo; utilizar el propio o cargarlo de assets solo si se desea (se manejó con runCatching para evitar crash).  
+• Declarar permisos en AndroidManifest y pedirlos en tiempo de ejecución según el manual.
+
+3.3 Flujo correcto de operación
+Para ambos periféricos, el flujo estándar es: getInstance → powerOn → open → (operar) → close → powerOff; powerOn siempre antes de open, y close antes de powerOff. Solo tras un open exitoso el periférico funciona.  
+Ejemplo (huella): encender (powerOn), abrir (open), capturar/procesar (Bione), cerrar y apagar.  
+Ejemplo (QR): powerOn, open, scan/read, close, powerOff.
+
+3.4 Gestión de energía
+En dispositivos a batería, powerOn+open puede tardar ~3 s; close+powerOff ~1 s. Encapsular estas acciones en corrutinas y mostrar indicadores de progreso; evitar powerOn/Off redundantes para ahorrar energía y latencia.
+
+3.5 Manejo de errores
+El SDK define códigos para FingerprintScanner (p. ej., RESULT_OK=0, TIMEOUT=-1004, NO_FINGER=-2005) y para Bione (p. ej., NOT_MATCH=-2003, DATABASE_FULL=-2008). La UI debe mapearlos a mensajes claros y, cuando corresponda, ofrecer reintentos limitados o cancelación.
+
+4. Diseño de UI/UX y theming
+4.1 AppTheme y esquemas de color
+• Esquema claro y esquema OLED (true black): fondo #000000 para no encender píxeles, textos de alto contraste (OnBackgroundOled), superficies negras, contornos discretos.  
+• Opción de Dynamic Color cuando el sistema lo permita (Android 12+).  
+• El tema se aplica globalmente y la raíz usa una Surface que fija color de fondo y de contenido para garantizar consistencia.
+
+4.2 Top App Bar creativa
+• FancyTopBar: gradiente horizontal verde de marca ↔ violeta ↔ verde, íconos claros y chip de subtítulo como “píldora de estado”.  
+• Menú de acciones con refresco y acceso rápido a niveles LFD (OFF/LOW/MID/HIGH).  
+• Divider sutil para fundir la barra con las cards.
+
+4.3 Componentes reutilizables
+• SectionCard: card con esquinas 26dp, borde 1dp, elevación animada y fondo que cambia al expandir; encabezado con título y caret rotado.  
+• Píldoras de estado (online/offline), chips de firmware/serial/modelo, barras de métricas para Calidad (0–100) y NFIQ (1 mejor).  
+• Diálogo bloqueante de progreso con opción de cancelar en captura/escaneo.
+
+4.4 Desplazamiento fluido
+• Migración a LazyColumn con rememberLazyListState, espaciado consistente entre ítems y padding dependiente de orientación.  
+• La física de scroll por defecto de Compose usa el comportamiento del sistema y ofrece un movimiento suave en tablet; no se requieren ajustes adicionales salvo casos de listas extremadamente largas.
+
+5. Ajustes de compilación y dependencias
+• Material3 1.4.0 requiere AGP 8.6+ y compileSdk 35. Solución A: actualizar AGP (gradle-plugin) y compileSdk; Solución B: fijar material3 a 1.2.x/1.3.x si se desea mantener AGP 8.5.x.  
+• Compose BOM 2024.09.x, activity-compose 1.9.x, coroutines 1.8.1, Room 2.6.1.  
+• Íconos: agregar androidx.compose.material:material-icons-extended para vectores como ArrowDropDown.
+
+6. Resultados
+• Tablero funcional con estados FP/QR, datos de FW y SN, tiempos de captura/extracción/plantilla/verificación y visor de huella/miniatura.  
+• Acciones para abrir/cerrar dispositivos, runFp (show/enroll/verify/identify), runQr y limpieza de DB.  
+• Diálogo de progreso durante operaciones con posibilidad de cancelación cuando es seguro.  
+• Tema OLED aplicado a toda la jerarquía para mejor contraste y ahorro en pantallas OLED.
+
+7. Discusión y recomendaciones
+1) Alinear versiones: decidir entre subir AGP/compileSdk o fijar versión de Material3.  
+2) Energía: minimizar powerOn/powerOff; mantener los dispositivos abiertos mientras se realizan lotes de operaciones y cerrarlos si habrá inactividad prolongada.  
+3) UX en campo: mantener alto contraste y feedback inmediato mediante chips y barras; considerar vibración o sonidos suaves para confirmar lectura.  
+4) Errores y timeouts: presentar mensajes localizados y estrategias de reintento razonables; registrar métricas (latencias y tasas de éxito) para mejorar la experiencia.
+
+8. Conclusiones
+Se dejó una base moderna y robusta para biometría y lectura de códigos en Marshall 8, alineada con el flujo prescrito por Aratek y con una experiencia de usuario clara y fluida. El siguiente paso es fijar la estrategia de compilación (AGP/compileSdk vs. versión de Material3) y realizar pruebas de campo con plantillas reales, evaluando rendimiento, consumo y estabilidad.
+
+Referencias (formato APA 7ª edición)
+Aratek Biometrics Technology Co., Ltd. (2022). Aratek BMAPI Development Kit Manual (V3.3). Shenzhen, China.
+Aratek Biometrics Co., Ltd. (2023). Marshall 8 – Tableta biométrica [Folleto]. Taipei, Taiwán.
+Aratek Biometrics Technology Co., Ltd. (2018/2021). Aratek Smart Terminal Products – Power Management Solution (V1.1). Shenzhen, China.
