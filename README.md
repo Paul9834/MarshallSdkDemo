@@ -1,61 +1,69 @@
-# MarshallSdkDemo · Bitácora creativa del ingeniero Paul Montealegre
+# MarshallSdkDemo · README técnico
 
-> "Si el hardware late, la app lo cuenta" — Paul Montealegre
+## Descripción
+Demo Android (Jetpack Compose) para integrar el **Marshall 8** de Aratek con el **SDK BMAPI v3.x**. Expone flujos de huella (enrolar, verificar, identificar) y escaneo de QR, con arquitectura orientada a pruebas y desacople de drivers.
 
-## Panorama del laboratorio
-MarshallSdkDemo es el showcase personal de Paul Montealegre para el Marshall 8: una app Android en Compose que conecta sensores biométricos de Aratek con una experiencia de tablero digna de sala de control. El proyecto vive en el módulo `:app`, con los SDK nativos empacados en `libs/` y `jniLibs/`, listo para cargar la configuración del terminal al iniciar.
+## Estructura de módulos
+- **:app** — UI Compose, navegación y ViewModels.
+- **libs/** — JARs de BMAPI.
+- **src/main/jniLibs/** — librerías nativas por ABI.
+- **assets/terminal.xml** — configuración del terminal Marshall (no modificar en actualizaciones del SDK).
 
-## Arquitectura Compose + BMAPI
-- **Vista y navegación**. `MainActivity` habilita `enableEdgeToEdge()`, carga las preferencias del terminal con `Terminal.loadSettings` y monta `MainAppScaffold`, donde vive la `FancyTopBar` y el dashboard completo.
-- **Estado**. `MainDashboardViewModel` (AndroidViewModel) gobierna el `DashState`, ejecuta operaciones de hardware en `Dispatchers.IO` y activa flags de cancelación para captura de huellas (`cancelFp`) o escaneo QR (`cancelQr`).
-- **Dominio y repositorios**. `FingerprintGateway`, `FingerFeature` e `InMemoryFingerprintRepo` permiten simular enrolamiento y verificación sin depender todavía del SDK nativo.
-- **Drivers**. `BmapiDriverPlaceholder` reserva el punto de conexión para encapsular los `AraBMApi*.jar` y librerías JNI cuando se integre el hardware real.
+## Arquitectura
+- **UI (Compose)**: `MainActivity` habilita `enableEdgeToEdge()` y monta `MainAppScaffold`. `MainDashboard.kt` presenta tarjetas de estado, métricas y diálogos bloqueantes para operaciones críticas.
+- **Estado**: `MainDashboardViewModel` (AndroidViewModel) orquesta corrutinas en `Dispatchers.IO`, administra cancelaciones (`cancelFp`, `cancelQr`) y publica `DashState`.
+- **Dominio/Datos**: `FingerprintGateway`, `FingerFeature` e `InMemoryFingerprintRepo` simulan enrolamiento/verificación para pruebas sin hardware.
+- **Drivers**: `BmapiDriverPlaceholder` define el punto de integración con `Terminal`, `FingerprintScanner`, `Bione` y `CodeScanner`.
 
-## Explorador de clases clave
-| Archivo | Rol narrativo |
-| --- | --- |
-| `MainDashboard.kt` | Composable con `SectionCard`, chips de estado y un diálogo bloqueante que acompaña cada paso biométrico. |
-| `MainDashboardViewModel.kt` | Orquesta `FingerprintScanner`, `Bione` y `CodeScanner`: abre/cierra periféricos, mide tiempos (captura, extracción, template, verificación) y traduce errores a mensajes UX. |
-| `ui/theme/*.kt` | Define la identidad Material 3 true black, tipografías landscape y shapes de 26 dp consistentes para tablet. |
-| `domain/` + `data/` | Expone un pipeline de enrolamiento/verificación con IDs libres para experimentar sin arriesgar la base real. |
-| `drivers/BmapiDriverPlaceholder.kt` | Cascarón donde aterrizarán las llamadas directas al SDK BMAPI. |
+## Integración con hardware (BMAPI)
+### Ciclo general recomendado
+`getInstance → powerOn → open → [operación] → close → powerOff`
 
-## Flujos operativos esenciales
-1. **Habilitar hardware** — `openFp()`/`openQr()` siguen la receta oficial `getInstance → powerOn → open` y registran firmware, serial y modelo para la bitácora.
-2. **Capturar y procesar huellas** — `runFp(mode)` prepara el sensor, usa `capture(timeout)` cuando está disponible, genera miniaturas y ejecuta `Bione.extractFeature`, `makeTemplate`, `enroll`, `verify` o `identify` según el modo solicitado.
-3. **Lectura de códigos** — `runQr()` gestiona timeouts, reintentos de apertura (`DEVICE_NOT_OPEN`) y devuelve el texto del QR en UTF-8 o el error asociado.
-4. **UX resiliente** — `BlockingLoadingDialog` bloquea interacciones peligrosas, mientras que las métricas en tarjeta muestran tiempos, NFIQ, calidad y los últimos IDs/score.
+### Clases relevantes
+- **Terminal**: versión de SDK, utilidades del terminal.
+- **FingerprintScanner**: `powerOn/open/prepare/capture/finish/close/powerOff`, versión de driver/firmware, modelo, SN, LFD.
+- **Bione**: `initialize/extractFeature|Iso|Ansi/makeTemplate/enroll/verify/identify/clear`. Soporta BIONE™, ISO/IEC 19794-2, ANSI-378.
+- **CodeScanner**: `powerOn/open/scan/read/close/powerOff`.
 
-## Bitácora ampliada y recursos
-- Consulta `docs/Informe_Integracion_Aratek_Marshall8_APA.txt` para ver el informe APA con decisiones de theming, dependencias y recomendaciones de campo.
-- El tema Material 3 (`AppTheme`, `AppColorScheme`, `FancyTopBar`) ya soporta true black en Marshall 8 y está listo para activar Dynamic Color cuando la misión lo requiera.
+### Manejo de energía
+- **Prioridad batería**: encender/abrir antes de usar y cerrar/apagar al terminar.
+- **Prioridad velocidad**: mantener encendido/abierto durante la sesión (mayor consumo).
+- **Balance**: abrir al iniciar la app y apagar por inactividad o al cerrar.
 
-## Logros clave de Paul
+## Flujos operativos
+- **Huella (enrolar)**: `Bione.initialize → FingerprintScanner.prepare → capture → extractFeature → makeTemplate → enroll → finish → Bione.exit`.
+- **Huella (verificar/identificar)**: `capture → extractFeature → verify(id, feature) | identify(feature)`.
+- **QR**: `CodeScanner.scan()` y validar `data != null`.
+- **Errores comunes**: `DEVICE_NOT_OPEN`, `TIMEOUT`, `NOT_ENOUGH_MEMORY`, `NO_FINGER`, etc.
 
-### 🛰️ Orquestación de sensores Marshall
-Paul creó un ViewModel que enciende y apaga el lector de huellas y el escáner QR, ajusta el nivel LFD y expone en estado reactivo firmware, serie y versiones del motor biométrico. Toda operación larga vive en corrutinas `Dispatchers.IO`, manteniendo la UI fluida incluso mientras se prepara hardware o se limpia la base de datos.
+## UI y UX (Compose)
+- **Dashboard**: tarjetas con métricas (tiempos de captura/extracción/matching, NFIQ/calidad), miniaturas de huella y últimos IDs/scores.
+- **Seguridad UX**: `BlockingLoadingDialog` evita interacciones durante operaciones críticas.
+- **Temado**: Material 3 con esquema “true black” y soporte landscape. Prep listo para Dynamic Color.
 
-### 🖥️ Dashboard vivo en Compose
-El panel principal combina tarjetas animadas, métricas en vivo y galerías de acciones rápidas para cada sensor. Los estados se pintan con chips, barras de progreso NFIQ/calidad y miniaturas de la huella capturada, además de diálogos bloqueantes con microcopys personalizados para cada paso del flujo.
+## Requisitos del entorno
+- **AGP/Kotlin**: AGP 8.5.2, Kotlin 1.9.24.
+- **Android**: BMAPI compatible desde Android 4.4+ (API 19).
+- **Permisos**: agregar permisos de almacenamiento/lectura de estado según demo.
+- **ABI**: conservar solo el directorio de `jniLibs` correspondiente a la arquitectura destino.
 
-### 🔬 Flujo biométrico extremo a extremo
-Desde la captura cruda hasta enrolar, verificar o identificar huellas, Paul encapsuló tiempos de captura/extracción, generación de templates y respuestas de Bione, guardando los últimos IDs y puntajes para storytelling instantáneo en la UI.
+## Instalación e importación del SDK
+1. Copiar **todos** los JAR a `libs/` y **todas** las carpetas de `jniLibs/` al proyecto.  
+2. Copiar `assets/terminal.xml` (solo en primera integración; **no** sobreescribir al actualizar).  
+3. Verificar permisos en `AndroidManifest` y runtime permissions.  
+4. Sincronizar con Gradle y compilar.
 
-### 🎨 Identidad visual "verde Ferxxo"
-El tema Material 3 se adapta a portrait/landscape, aplica una paleta negra para OLED y ofrece un top bar degradado con atajos rápidos para el nivel LFD y refrescos instantáneos del dispositivo, manteniendo la estética de marca que Paul definió.
+## Buenas prácticas
+- **Autorización Bione**: abrir exitosamente el lector **antes** de `Bione.initialize`, o retornará `-1014`.
+- **Capacidad 1:N**: motor integrado soporta hasta ~10 000 templates (BIONE™).
+- **Depuración sin USB**: usar `adb tcpip` cuando el puerto esté ocupado por periféricos.
+- **Actualizaciones del SDK**: reemplazar **todas** las libs; no mezclar versiones.
 
-### 🧪 Infraestructura de pruebas en memoria
-Mientras se integran los drivers reales, existe un repositorio en memoria que modela enrolamiento y verificación para escenarios offline, además de un placeholder para el driver BMAPI definitivo.
+## Roadmap
+- Implementar el driver real en `BmapiDriverPlaceholder`.
+- Persistir enrolamientos con Room/SQLCipher.
+- Exportar logs y trazas para soporte de campo.
+- Activar Dynamic Color y perfiles de tema por escenario.
 
-## Kit de exploración
-1. **Clonar y sincronizar**: `./gradlew sync` descarga dependencias; el wrapper usa Kotlin 1.9.24 y AGP 8.5.2.
-2. **Lanzar en hardware Marshall 8** para aprovechar `terminal.xml` y los binarios nativos.
-3. **Interactuar con la UI**: abre/cierra sensores, juega con los niveles LFD y sigue la narrativa en tiempo real.
-
-## Próxima misión sugerida
-- Integrar el driver BMAPI real sobre la clase placeholder.
-- Persistir enrolamientos fuera de memoria (SQLCipher o Room).
-- Añadir captura de logs y exportación para soporte de campo.
-
-## Crédito
-Bitácora compilada por Paul Montealegre Melo, ingeniero biométrico y narrador del Marshall 8.
+## Especificaciones del dispositivo objetivo (Marshall 8)
+Android 11+, lector FAP 30 (A700) con LFD, QR, NFC/contacto, 4G/Wi-Fi/BT/GPS, batería 10 000 mAh, IP65. Aplicaciones: registro de votantes, KYC, censo y control de acceso.
