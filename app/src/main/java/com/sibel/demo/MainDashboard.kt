@@ -1,24 +1,17 @@
-@file:OptIn(ExperimentalLayoutApi::class)
-
 package com.sibel.demo
 
 import android.content.res.Configuration
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.animateColor
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateDp
-import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,11 +21,20 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.TravelExplore
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
@@ -48,16 +50,20 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
@@ -68,8 +74,19 @@ import androidx.compose.ui.window.DialogProperties
 import cn.com.aratek.fp.FingerprintScanner
 import kotlin.math.max
 
+private val LFD_OPTIONS = listOf(
+    "OFF" to FingerprintScanner.LFD_LEVEL_OFF,
+    "LOW" to 1,
+    "MID" to 2,
+    "HIGH" to 3
+)
 
-@OptIn(ExperimentalAnimationApi::class)
+private fun timeLabel(v: Long?) = when {
+    v == null || v < 0 -> "—"
+    v < 1 -> "<1ms"
+    else -> "${v}ms"
+}
+
 @Composable
 private fun SectionCard(
     title: String,
@@ -80,31 +97,16 @@ private fun SectionCard(
     expanded: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val transition = updateTransition(targetState = expanded, label = "SectionCard")
-
-    val elev by transition.animateDp(label = "elev") { if (it) 12.dp else 4.dp }
-    val bg by transition.animateColor(label = "bg") {
-        if (it) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
-    }
-
-    val shape = RoundedCornerShape(26.dp)
-    val colors = CardDefaults.cardColors(containerColor = bg)
-    val elevation = CardDefaults.cardElevation(defaultElevation = elev)
+    val shape = RoundedCornerShape(20.dp)
+    val colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    val elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-
     val header: @Composable () -> Unit = {
         Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp),
+            Modifier.fillMaxWidth().padding(bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                title,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold
-            )
+            Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
             if (onClick != null) {
                 Icon(
                     imageVector = Icons.Filled.ArrowDropDown,
@@ -114,89 +116,38 @@ private fun SectionCard(
             }
         }
     }
-
     if (onClick != null) {
-        Card(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = modifier,
-            shape = shape,
-            colors = colors,
-            elevation = elevation,
-            border = border
-        ) {
+        Card(onClick = onClick, enabled = enabled, modifier = modifier, shape = shape, colors = colors, elevation = elevation, border = border) {
             Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 22.dp, vertical = 18.dp)
-                    .heightIn(min = minHeight)
-                    .animateContentSize(),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                header()
-                content()
-            }
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp).heightIn(min = minHeight),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) { header(); content() }
         }
     } else {
-        Card(
-            modifier = modifier,
-            shape = shape,
-            colors = colors,
-            elevation = elevation,
-            border = border
-        ) {
+        Card(modifier = modifier, shape = shape, colors = colors, elevation = elevation, border = border) {
             Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 22.dp, vertical = 18.dp)
-                    .heightIn(min = minHeight)
-                    .animateContentSize(),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                header()
-                content()
-            }
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp).heightIn(min = minHeight),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) { header(); content() }
         }
     }
 }
-
-
-
 
 @Composable
 private fun Chip(text: String) {
     Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    ) {
-        Text(text, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-    }
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)).padding(horizontal = 12.dp, vertical = 6.dp)
+    ) { Text(text, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge) }
 }
 
 @Composable
 private fun StatusPill(online: Boolean, label: String) {
-    val bg = if (online) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-    else MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
-    val fg = if (online) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.error
-
+    val bg = if (online) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
+    val fg = if (online) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
     Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(24.dp))
-            .background(bg)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Text(
-            label,
-            color = fg,
-            style = MaterialTheme.typography.labelLarge,
-            maxLines = 1
-        )
-    }
+        modifier = Modifier.clip(RoundedCornerShape(24.dp)).background(bg).padding(horizontal = 10.dp, vertical = 6.dp)
+    ) { Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1) }
 }
-
 
 @Composable
 private fun KeyValueRow(k: String, v: String, modifier: Modifier = Modifier) {
@@ -208,14 +159,14 @@ private fun KeyValueRow(k: String, v: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun MetricBar(label: String, value: Int?, valueRange: IntRange, goodLowIsBetter: Boolean = false) {
-    val v = value ?: 0
-    val clamped = v.coerceIn(valueRange.first, valueRange.last)
+    val raw = value ?: 0
+    val clamped = raw.coerceIn(valueRange.first, valueRange.last)
     val norm = if (valueRange.last == valueRange.first) 0f else (clamped - valueRange.first).toFloat() / (valueRange.last - valueRange.first)
     val progress = if (goodLowIsBetter) 1f - norm else norm
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, style = MaterialTheme.typography.labelLarge)
-            Text(if (value == null) "—" else v.toString(), style = MaterialTheme.typography.labelLarge)
+            Text(if (value == null) "—" else raw.toString(), style = MaterialTheme.typography.labelLarge)
         }
         LinearProgressIndicator(progress = { if (value == null) 0f else progress }, modifier = Modifier.fillMaxWidth().height(8.dp))
     }
@@ -224,8 +175,24 @@ private fun MetricBar(label: String, value: Int?, valueRange: IntRange, goodLowI
 @Composable
 private fun TwoColumns(left: @Composable ColumnScope.() -> Unit, right: @Composable ColumnScope.() -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) { left() }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) { right() }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) { left() }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) { right() }
+    }
+}
+
+@Composable
+private fun StatusRow(icon: ImageVector, text: String, tone: Color = MaterialTheme.colorScheme.primary) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(icon, null, tint = tone)
+        Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -239,25 +206,19 @@ private fun BlockingLoadingDialog(
     if (!visible) return
     Dialog(
         onDismissRequest = {},
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false
-        )
+        properties = DialogProperties(usePlatformDefaultWidth = true, dismissOnBackPress = false, dismissOnClickOutside = false)
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(14.dp),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier
-                    .widthIn(min = 360.dp)
-                    .padding(24.dp)
+                modifier = Modifier.widthIn(min = 280.dp).padding(16.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     CircularProgressIndicator()
@@ -270,57 +231,245 @@ private fun BlockingLoadingDialog(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DeviceInfoChips(
+    fpFw: String?,
+    fpSn: String?,
+    fpModel: String?,
+    qrFw: String?,
+    qrSn: String?,
+    bioneVersion: String?
+) {
+    val chipData = remember(fpFw, fpSn, fpModel, qrFw, qrSn, bioneVersion) {
+        listOf(
+            "fp_fw" to "FP • FW: ${fpFw ?: "—"}",
+            "fp_sn" to "SN: ${fpSn ?: "—"}",
+            "fp_model" to "Modelo: ${fpModel ?: "—"}",
+            "qr_fw" to "QR • FW: ${qrFw ?: "—"}",
+            "qr_sn" to "SN: ${qrSn ?: "—"}",
+            "bione" to "Bione: ${bioneVersion ?: "—"}"
+        )
+    }
+
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        chipData.forEach { (key, text) ->
+            key(key) {
+                Chip(text)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ActionChipsRow(
+    isFpOpen: Boolean,
+    isQrOpen: Boolean,
+    busy: BusyStateVM,
+    lfdLabel: String,
+    fpStateLabel: String,
+    qrStateLabel: String,
+    onFpToggle: () -> Unit,
+    onQrToggle: () -> Unit,
+    onSetLfd: (Int) -> Unit,
+    onRefreshInfo: () -> Unit
+) {
+    val isIdle = busy == BusyStateVM.IDLE
+
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        AssistChip(
+            enabled = isIdle,
+            onClick = onFpToggle,
+            label = { Text("FP: $fpStateLabel") }
+        )
+
+        AssistChip(
+            enabled = isIdle,
+            onClick = onQrToggle,
+            label = { Text("QR: $qrStateLabel") }
+        )
+
+        var expanded by remember { mutableStateOf(false) }
+        OutlinedButton(
+            enabled = isFpOpen && isIdle,
+            onClick = { expanded = true }
+        ) {
+            Icon(Icons.Filled.Security, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("LFD: $lfdLabel")
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            LFD_OPTIONS.forEach { (label, value) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        expanded = false
+                        onSetLfd(value)
+                    }
+                )
+            }
+        }
+
+        Button(
+            enabled = isIdle,
+            onClick = onRefreshInfo
+        ) {
+            Icon(Icons.Filled.Refresh, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("Actualizar info")
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FingerprintActionsRow(
+    isFpOpen: Boolean,
+    busy: BusyStateVM,
+    onRunFpShow: () -> Unit,
+    onRunFpEnroll: () -> Unit,
+    onRunFpVerify: () -> Unit,
+    onRunFpIdentify: () -> Unit,
+    onClearFpDb: () -> Unit
+) {
+    val isIdle = isFpOpen && busy == BusyStateVM.IDLE
+
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Button(enabled = isIdle, onClick = onRunFpShow) {
+            Icon(Icons.Filled.Visibility, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("Mostrar")
+        }
+        Button(enabled = isIdle, onClick = onRunFpEnroll) {
+            Icon(Icons.Filled.PersonAdd, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("Enroll")
+        }
+        Button(enabled = isIdle, onClick = onRunFpVerify) {
+            Icon(Icons.Filled.CheckCircle, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("Verify")
+        }
+        Button(enabled = isIdle, onClick = onRunFpIdentify) {
+            Icon(Icons.Filled.TravelExplore, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("Identify")
+        }
+        OutlinedButton(enabled = isIdle, onClick = onClearFpDb) {
+            Icon(Icons.Filled.CleaningServices, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text("Limpiar DB")
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun MainDashboard(vm: MainDashboardViewModel) {
     val s by vm.ui.collectAsState()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val scroll = rememberScrollState()
 
-    fun timeLabel(v: Long?) = when { v == null || v < 0 -> "—"; v < 1 -> "<1ms"; else -> "${v}ms" }
-    val lfdLabel = listOf("OFF" to FingerprintScanner.LFD_LEVEL_OFF, "LOW" to 1, "MID" to 2, "HIGH" to 3).firstOrNull { it.second == s.lfdLevel }?.first ?: "OFF"
+    val lfdLabel by remember {
+        derivedStateOf {
+            LFD_OPTIONS.firstOrNull { it.second == s.lfdLevel }?.first ?: "OFF"
+        }
+    }
+
+    val fpImage by remember {
+        derivedStateOf { s.fpBitmap?.asImageBitmap() }
+    }
+
+    val fpThumbImage by remember {
+        derivedStateOf { s.fpThumb?.asImageBitmap() }
+    }
+
+    val onFpToggle = remember(vm) {
+        { if (s.isFpOpen) vm.closeFp() else vm.openFp() }
+    }
+    val onQrToggle = remember(vm) {
+        { if (s.isQrOpen) vm.closeQr() else vm.openQr() }
+    }
+    val onSetLfd = remember(vm) { { value: Int -> vm.setLfd(value) } }
+    val onRefreshInfo = remember(vm) { { vm.openFp(); vm.openQr() } }
+    val onRunFpShow = remember(vm) { { vm.runFp("show") } }
+    val onRunFpEnroll = remember(vm) { { vm.runFp("enroll") } }
+    val onRunFpVerify = remember(vm) { { vm.runFp("verify") } }
+    val onRunFpIdentify = remember(vm) { { vm.runFp("identify") } }
+    val onClearFpDb = remember(vm) { { vm.clearFpDb() } }
+    val onRunQr = remember(vm) { { vm.runQr() } }
+    val onCancelCurrent = remember(vm) { { vm.cancelCurrent() } }
 
     val headerRow = @Composable {
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxWidth()) {
             Box(Modifier.weight(1f)) {
-                SectionCard("Dispositivo", minHeight = 240.dp) {
+                SectionCard("Dispositivo", minHeight = 200.dp) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatusPill(s.isFpOpen, if (s.isFpOpen) "FP activo" else "FP cerrado")
                         StatusPill(s.isQrOpen, if (s.isQrOpen) "QR activo" else "QR cerrado")
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Chip("FP • FW: ${s.fpFw ?: "—"}"); Chip("SN: ${s.fpSn ?: "—"}"); Chip("Modelo: ${s.fpModel ?: "—"}")
-                        Chip("QR • FW: ${s.qrFw ?: "—"}"); Chip("SN: ${s.qrSn ?: "—"}"); Chip("Bione: ${s.bioneVersion ?: "—"}")
-                    }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        AssistChip(enabled = s.busy == BusyStateVM.IDLE, onClick = { if (s.isFpOpen) vm.closeFp() else vm.openFp() }, label = { Text("FP: ${s.fpStateLabel}") })
-                        AssistChip(enabled = s.busy == BusyStateVM.IDLE, onClick = { if (s.isQrOpen) vm.closeQr() else vm.openQr() }, label = { Text("QR: ${s.qrStateLabel}") })
-                        var expanded by remember { mutableStateOf(false) }
-                        OutlinedButton(enabled = s.isFpOpen && s.busy == BusyStateVM.IDLE, onClick = { expanded = true }) { Text("🛡️ LFD: $lfdLabel") }
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            listOf("OFF" to FingerprintScanner.LFD_LEVEL_OFF, "LOW" to 1, "MID" to 2, "HIGH" to 3).forEach { (label, value) ->
-                                DropdownMenuItem(text = { Text(label) }, onClick = { expanded = false; vm.setLfd(value) })
-                            }
-                        }
-                        Button(enabled = s.busy == BusyStateVM.IDLE, onClick = { vm.openFp(); vm.openQr() }) { Text("🔄 Actualizar info") }
-                    }
+
+                    DeviceInfoChips(
+                        fpFw = s.fpFw,
+                        fpSn = s.fpSn,
+                        fpModel = s.fpModel,
+                        qrFw = s.qrFw,
+                        qrSn = s.qrSn,
+                        bioneVersion = s.bioneVersion
+                    )
+
+                    ActionChipsRow(
+                        isFpOpen = s.isFpOpen,
+                        isQrOpen = s.isQrOpen,
+                        busy = s.busy,
+                        lfdLabel = lfdLabel,
+                        fpStateLabel = s.fpStateLabel,
+                        qrStateLabel = s.qrStateLabel,
+                        onFpToggle = onFpToggle,
+                        onQrToggle = onQrToggle,
+                        onSetLfd = onSetLfd,
+                        onRefreshInfo = onRefreshInfo
+                    )
                 }
             }
             Box(Modifier.weight(1f)) {
-                SectionCard("Resumen y métricas", minHeight = 240.dp) {
+                SectionCard("Resumen y métricas", minHeight = 200.dp) {
                     TwoColumns(
                         left = {
                             Text("Estados", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            KeyValueRow("🖐️ FP", s.fpResult ?: "—")
-                            KeyValueRow("📷 QR", s.qrResult ?: "—")
-                            KeyValueRow("🆔 Último ID", s.lastId?.toString() ?: "—")
-                            KeyValueRow("🎯 Score", s.lastScore?.toString() ?: "—")
+                            val captured = fpImage != null
+                            StatusRow(icon = if (captured) Icons.Filled.CheckCircle else Icons.Filled.Visibility, text = if (captured) "Capturada" else "Sin captura")
+                            Spacer(Modifier.height(8.dp))
+                            InfoRow("Tamaño", s.fpSize ?: "—")
+                            InfoRow("Calidad (Bione)", s.quality?.toString() ?: "—")
+                            InfoRow("NFIQ (1=mejor)", s.nfiq?.toString() ?: "—")
+                            InfoRow("Cap", timeLabel(s.captureTime))
+                            Spacer(Modifier.height(12.dp))
+                            Text("Estados rápidos", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            InfoRow("FP", s.fpResult ?: "—")
+                            InfoRow("QR", s.qrResult ?: "—")
+                            InfoRow("Último ID", s.lastId?.toString() ?: "—")
+                            InfoRow("Score", s.lastScore?.toString() ?: "—")
                         },
                         right = {
                             Text("Tiempos", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            KeyValueRow("⚡ Captura", timeLabel(s.captureTime))
-                            KeyValueRow("🧬 Extracción", timeLabel(s.extractTime))
-                            KeyValueRow("🧪 Template", timeLabel(s.generalizeTime))
-                            KeyValueRow("🔎 Verificación", timeLabel(s.verifyTime))
+                            KeyValueRow("Captura", timeLabel(s.captureTime))
+                            KeyValueRow("Extracción", timeLabel(s.extractTime))
+                            KeyValueRow("Template", timeLabel(s.generalizeTime))
+                            KeyValueRow("Verificación", timeLabel(s.verifyTime))
                         }
                     )
                     Spacer(Modifier.height(8.dp))
@@ -328,8 +477,19 @@ fun MainDashboard(vm: MainDashboardViewModel) {
                     Spacer(Modifier.height(6.dp))
                     MetricBar(label = "NFIQ (1=mejor)", value = s.nfiq?.let { max(1, it) }, valueRange = 1..5, goodLowIsBetter = true)
                     if (s.lastError != null) {
-                        Spacer(Modifier.height(8.dp))
-                        AssistChip(onClick = {}, label = { Text("⚠️ ${s.lastError}") }, colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.errorContainer, labelColor = MaterialTheme.colorScheme.onErrorContainer))
+                        AssistChip(
+                            onClick = {},
+                            label = {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Icon(Icons.Filled.Error, contentDescription = null)
+                                    Text(s.lastError ?: "")
+                                }
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                labelColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        )
                     }
                 }
             }
@@ -343,11 +503,14 @@ fun MainDashboard(vm: MainDashboardViewModel) {
                             .background(MaterialTheme.colorScheme.surface),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (s.fpBitmap != null) {
+                        val img = fpImage
+                        if (img != null) {
                             Image(
-                                bitmap = s.fpBitmap!!.asImageBitmap(),
+                                bitmap = img,
                                 contentDescription = null,
-                                modifier = Modifier.fillMaxWidth().height(160.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(160.dp),
                                 contentScale = ContentScale.Fit
                             )
                         } else {
@@ -362,13 +525,17 @@ fun MainDashboard(vm: MainDashboardViewModel) {
     val actionRow = @Composable {
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxWidth()) {
             Box(Modifier.weight(1f)) {
-                SectionCard("Lector QR", minHeight = 220.dp) {
+                SectionCard("Lector QR", minHeight = 200.dp) {
                     Text(s.qrResult ?: if (s.isQrOpen) "Listo para escanear" else "Cerrado", style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(8.dp))
                     TwoColumns(
                         left = {
                             Text("Acciones", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Button(enabled = s.isQrOpen && s.busy == BusyStateVM.IDLE, onClick = { vm.runQr() }) { Text("🔍 Probar QR") }
+                            Button(enabled = s.isQrOpen && s.busy == BusyStateVM.IDLE, onClick = onRunQr) {
+                                Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
+                                Spacer(Modifier.size(8.dp))
+                                Text("Probar QR")
+                            }
                         },
                         right = {
                             Text("Detalles", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -379,12 +546,13 @@ fun MainDashboard(vm: MainDashboardViewModel) {
                 }
             }
             Box(Modifier.weight(1f)) {
-                SectionCard("🧬 Huella dactilar", minHeight = 220.dp) {
+                SectionCard("Huella dactilar", minHeight = 200.dp) {
                     Text(s.fpResult ?: if (s.isFpOpen) "Listo para capturar" else "Cerrado", style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (s.fpThumb != null) {
-                            Image(s.fpThumb!!.asImageBitmap(), null, modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)))
+                        val thumbImg = fpThumbImage
+                        if (thumbImg != null) {
+                            Image(thumbImg, null, modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)))
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             KeyValueRow("Tamaño", s.fpSize ?: "—")
@@ -393,51 +561,60 @@ fun MainDashboard(vm: MainDashboardViewModel) {
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(enabled = s.isFpOpen && s.busy == BusyStateVM.IDLE, onClick = { vm.runFp("show") }) { Text("👁️ Mostrar") }
-                        Button(enabled = s.isFpOpen && s.busy == BusyStateVM.IDLE, onClick = { vm.runFp("enroll") }) { Text("➕ Enroll") }
-                        Button(enabled = s.isFpOpen && s.busy == BusyStateVM.IDLE, onClick = { vm.runFp("verify") }) { Text("✅ Verify") }
-                        Button(enabled = s.isFpOpen && s.busy == BusyStateVM.IDLE, onClick = { vm.runFp("identify") }) { Text("🧭 Identify") }
-                        OutlinedButton(enabled = s.isFpOpen && s.busy == BusyStateVM.IDLE, onClick = { vm.clearFpDb() }) { Text("🧹 Limpiar DB") }
-                    }
+
+                    FingerprintActionsRow(
+                        isFpOpen = s.isFpOpen,
+                        busy = s.busy,
+                        onRunFpShow = onRunFpShow,
+                        onRunFpEnroll = onRunFpEnroll,
+                        onRunFpVerify = onRunFpVerify,
+                        onRunFpIdentify = onRunFpIdentify,
+                        onClearFpDb = onClearFpDb
+                    )
                 }
             }
         }
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(if (isLandscape) 24.dp else 16.dp)
-            .verticalScroll(scroll),
+    val listState = rememberLazyListState()
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        state = listState,
+        contentPadding = PaddingValues(if (isLandscape) 24.dp else 16.dp),
         verticalArrangement = Arrangement.spacedBy(if (isLandscape) 24.dp else 20.dp)
     ) {
-        headerRow()
-        actionRow()
+        item(key = "header") { headerRow() }
+        item(key = "action") { actionRow() }
     }
 
-    val busy = s.busy
-    val title = when (busy) {
-        BusyStateVM.PREP_FP -> "🛠️ Preparando lector de huellas…"
-        BusyStateVM.CAPTURE_FP -> "Capturando huella…"
-        BusyStateVM.PREP_QR -> "⚙️ Preparando escáner de códigos…"
-        BusyStateVM.SCAN_QR -> "🔎 Escaneando código…"
-        BusyStateVM.IDLE -> ""
-    }
-    val subtitle = when (busy) {
-        BusyStateVM.PREP_FP -> "Inicializando sensor y motor biométrico."
-        BusyStateVM.CAPTURE_FP -> "Coloca el dedo y mantén presión."
-        BusyStateVM.PREP_QR -> "Inicializando lector."
-        BusyStateVM.SCAN_QR -> "Alinea el QR o código de barras."
-        BusyStateVM.IDLE -> ""
-    }
-    val cancelHandler = when (busy) {
-        BusyStateVM.CAPTURE_FP, BusyStateVM.SCAN_QR -> ({ vm.cancelCurrent() })
-        else -> null
+    val (title, subtitle, cancelHandler) = remember(s.busy) {
+        when (s.busy) {
+            BusyStateVM.PREP_FP -> Triple(
+                "Preparando lector de huellas…",
+                "Inicializando sensor y motor biométrico.",
+                null
+            )
+            BusyStateVM.CAPTURE_FP -> Triple(
+                "Capturando huella…",
+                "Coloca el dedo y mantén presión.",
+                onCancelCurrent
+            )
+            BusyStateVM.PREP_QR -> Triple(
+                "Preparando escáner de códigos…",
+                "Inicializando lector.",
+                null
+            )
+            BusyStateVM.SCAN_QR -> Triple(
+                "Escaneando código…",
+                "Alinea el QR o código de barras.",
+                onCancelCurrent
+            )
+            BusyStateVM.IDLE -> Triple("", "", null)
+        }
     }
 
     BlockingLoadingDialog(
-        visible = busy != BusyStateVM.IDLE,
+        visible = s.busy != BusyStateVM.IDLE,
         title = title,
         subtitle = subtitle,
         onCancel = cancelHandler
