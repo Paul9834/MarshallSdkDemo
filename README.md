@@ -5,6 +5,31 @@
 ## Panorama del laboratorio
 MarshallSdkDemo es el showcase personal de Paul Montealegre para el Marshall 8: una app Android en Compose que conecta sensores biométricos de Aratek con una experiencia de tablero digna de sala de control. El proyecto vive en el módulo `:app`, con los SDK nativos empacados en `libs/` y `jniLibs/`, listo para cargar la configuración del terminal al iniciar.
 
+## Arquitectura Compose + BMAPI
+- **Vista y navegación**. `MainActivity` habilita `enableEdgeToEdge()`, carga las preferencias del terminal con `Terminal.loadSettings` y monta `MainAppScaffold`, donde vive la `FancyTopBar` y el dashboard completo.
+- **Estado**. `MainDashboardViewModel` (AndroidViewModel) gobierna el `DashState`, ejecuta operaciones de hardware en `Dispatchers.IO` y activa flags de cancelación para captura de huellas (`cancelFp`) o escaneo QR (`cancelQr`).
+- **Dominio y repositorios**. `FingerprintGateway`, `FingerFeature` e `InMemoryFingerprintRepo` permiten simular enrolamiento y verificación sin depender todavía del SDK nativo.
+- **Drivers**. `BmapiDriverPlaceholder` reserva el punto de conexión para encapsular los `AraBMApi*.jar` y librerías JNI cuando se integre el hardware real.
+
+## Explorador de clases clave
+| Archivo | Rol narrativo |
+| --- | --- |
+| `MainDashboard.kt` | Composable con `SectionCard`, chips de estado y un diálogo bloqueante que acompaña cada paso biométrico. |
+| `MainDashboardViewModel.kt` | Orquesta `FingerprintScanner`, `Bione` y `CodeScanner`: abre/cierra periféricos, mide tiempos (captura, extracción, template, verificación) y traduce errores a mensajes UX. |
+| `ui/theme/*.kt` | Define la identidad Material 3 true black, tipografías landscape y shapes de 26 dp consistentes para tablet. |
+| `domain/` + `data/` | Expone un pipeline de enrolamiento/verificación con IDs libres para experimentar sin arriesgar la base real. |
+| `drivers/BmapiDriverPlaceholder.kt` | Cascarón donde aterrizarán las llamadas directas al SDK BMAPI. |
+
+## Flujos operativos esenciales
+1. **Habilitar hardware** — `openFp()`/`openQr()` siguen la receta oficial `getInstance → powerOn → open` y registran firmware, serial y modelo para la bitácora.
+2. **Capturar y procesar huellas** — `runFp(mode)` prepara el sensor, usa `capture(timeout)` cuando está disponible, genera miniaturas y ejecuta `Bione.extractFeature`, `makeTemplate`, `enroll`, `verify` o `identify` según el modo solicitado.
+3. **Lectura de códigos** — `runQr()` gestiona timeouts, reintentos de apertura (`DEVICE_NOT_OPEN`) y devuelve el texto del QR en UTF-8 o el error asociado.
+4. **UX resiliente** — `BlockingLoadingDialog` bloquea interacciones peligrosas, mientras que las métricas en tarjeta muestran tiempos, NFIQ, calidad y los últimos IDs/score.
+
+## Bitácora ampliada y recursos
+- Consulta `docs/Informe_Integracion_Aratek_Marshall8_APA.txt` para ver el informe APA con decisiones de theming, dependencias y recomendaciones de campo.
+- El tema Material 3 (`AppTheme`, `AppColorScheme`, `FancyTopBar`) ya soporta true black en Marshall 8 y está listo para activar Dynamic Color cuando la misión lo requiera.
+
 ## Logros clave de Paul
 
 ### 🛰️ Orquestación de sensores Marshall
